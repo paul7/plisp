@@ -1,5 +1,5 @@
 (defpackage :plisp
-  (:use :cl)
+  (:use :cl :anaphora)
   (:export))
 
 (in-package :plisp)

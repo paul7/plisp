@@ -1,5 +1,5 @@
 (defsystem plisp
-  :depends-on ()
+  :depends-on (:anaphora)
   :components ((:module "src"
 			:components ((:file "defmodule")
 				     (:file "sync"
