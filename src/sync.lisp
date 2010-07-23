@@ -33,7 +33,7 @@
       ((defun defmacro defmethod 
 	 #+sbcl sb-int:named-lambda) . 3)))
   (defparameter *let-like-specials*
-    '(let flet labels macrolet let*)))
+    '(let flet labels symbol-macrolet let*)))
 
 (defmacro synced-form (form &environment env)
   (cond
@@ -68,8 +68,7 @@
 		,@(mapcar #'(lambda (subform)
 			      `(synced-form ,subform))
 			  (subseq form it))))
-	   ((or (not (special-operator-p (car form)))
-		(member (car form) *function-like-specials*))
+	   ((not (special-operator-p (car form)))
 	    `(synced-value (,(car form) ,@(mapcar #'(lambda (subform)
 						      `(synced-form ,subform))
 						  (cdr form)))))
