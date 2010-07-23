@@ -1,14 +1,15 @@
 (in-package :plisp)
 
-(set-dispatch-macro-character #\# #\!
-  #'(lambda (stream char1 char2)
-      (declare (ignore char1 char2))
-      (list 'synced-form (read stream t nil t))))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (set-dispatch-macro-character #\# #\!
+    #'(lambda (stream char1 char2)
+        (declare (ignore char1 char2))
+        (list 'synced-form (read stream t nil t))))
 
-(set-dispatch-macro-character #\# #\?
-  #'(lambda (stream char1 char2)
-      (declare (ignore char1 char2))
-      (list 'unsynced-form (read stream t nil t))))
+  (set-dispatch-macro-character #\# #\?
+    #'(lambda (stream char1 char2)
+        (declare (ignore char1 char2))
+        (list 'unsynced-form (read stream t nil t)))))
 
 (defclass proxy () 
   ((evaluator :initform (constantly nil) 
@@ -39,13 +40,13 @@
       ((block eval-when lambda) . 2)
       ((#+sbcl sb-int:named-lambda) . 3)))
   (defparameter *let-like-specials*
-    '(let flet labels symbol-macrolet let*)))
+    '(let flet labels symbol-macrolet let*))
 
-(defun make-synced-form (form &optional (except 0))
-  `(,@(subseq form 0 except)
-      ,@(mapcar #'(lambda (subform)
-		    `(synced-form ,subform))
-		(subseq form except))))
+  (defun make-synced-form (form &optional (except 0))
+    `(,@(subseq form 0 except)
+	,@(mapcar #'(lambda (subform)
+		      `(synced-form ,subform))
+		  (subseq form except)))))
 
 (defmacro synced-form (form &environment env)
   (cond
