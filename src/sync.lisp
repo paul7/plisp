@@ -49,13 +49,13 @@
   (defparameter *let-like-specials*
     '(let flet labels symbol-macrolet let*))
 
-  (defun make-synced-form (form &optional (except 0))
+  (defun make-synced-form (form except env) 
     `(,@(subseq form 0 except)
 	,@(mapcar #'(lambda (subform)
-		      `(synced-form ,subform))
+		      (synced-form/stage0 subform env))
 		  (subseq form except)))))
 
-(defmacro synced-form-not-macro (form)
+(defmacro synced-form-not-macro (form &environment env)
   (acond
     ((member (car form) *let-like-specials*)
      `(,(car form)
@@ -64,18 +64,18 @@
 			(synced-form ,(cadr binding))
 			,@(cddr binding)))
 		 (cadr form))
-	,@(make-synced-form (cddr form))))
+	,@(make-synced-form (cddr form) 0 env)))
     ((dolist (spec *quoting-specials*)
        (if (member (car form) (car spec))
 	   (return (cdr spec))))
-     (make-synced-form form it))
+     (make-synced-form form it env))
     ((not (special-operator-p (car form)))
-     `(synced-values ,(make-synced-form form 1)))
+     `(synced-values ,(make-synced-form form 1 env)))
     (t 
      (warn "unsupported special")
      form)))
 
-(defmacro synced-form (form &environment env)
+(defun synced-form/stage0 (form env)
   (cond
     ((and (symbolp form)
 	  (not (member form *special-atoms*)))
@@ -86,7 +86,7 @@
     ((eq (car form) 'unsynced-form)
      (if (atom (cadr form))
 	 (cadr form)
-	 (make-synced-form (cadr form) 1)))
+	 (make-synced-form (cadr form) 1 env)))
     ((eq (car form) 'function)
      (if (consp (cadr form))
 	 `(synced-form-not-macro ,(cadr form))
@@ -96,6 +96,9 @@
        (if macro-p
 	   `(synced-form ,exp-form)
 	   `(synced-form-not-macro ,form))))))
+
+(defmacro synced-form (form &environment env)
+  (synced-form/stage0 form env))
 
 (defmacro with-screened-symbols (screen-fun (&rest symbols) &body body)
   (let* ((sym-num (length symbols))
