@@ -13,11 +13,12 @@
 
 (defclass proxy () 
   ((evaluator :initform (constantly nil) 
-	     :initarg :evaluator
-	     :accessor proxy-evaluator)))
+	      :initarg :evaluator
+	      :accessor proxy-evaluator)))
 
 (defgeneric synced-value (object))
 
+;; make values-aware
 (defmethod synced-value ((object t))
   (format t "syncing ~a~%" object)
   object)
@@ -25,6 +26,10 @@
 (defmethod synced-value ((object proxy))
   (format t "evaluating")
   (funcall (proxy-evaluator object)))
+
+(defmacro synced-values (form) 
+  `(apply #'values (mapcar #'synced-value 
+			   (multiple-value-list ,form))))
 
 (defmacro unsynced-form (form)
   form)
@@ -36,8 +41,10 @@
     '(defstruct defclass quote defgeneric defmacro
       declare declaim proclaim))
   (defparameter *quoting-specials*
-    '(((if setq tagbody progn) . 1)
-      ((block eval-when lambda) . 2)
+    '(((if setq tagbody progn throw unwind-protect
+	   locally multiple-value-prog1 multiple-value-call
+	   catch progn) . 1)
+      ((block eval-when lambda return-from the) . 2)
       ((#+sbcl sb-int:named-lambda) . 3)))
   (defparameter *let-like-specials*
     '(let flet labels symbol-macrolet let*))
@@ -63,7 +70,7 @@
 	   (return (cdr spec))))
      (make-synced-form form it))
     ((not (special-operator-p (car form)))
-     `(synced-value ,(make-synced-form form 1)))
+     `(synced-values ,(make-synced-form form 1)))
     (t 
      (warn "unsupported special")
      form)))
@@ -85,7 +92,7 @@
 	 `(synced-form-not-macro ,(cadr form))
 	 form))
     (t
-     (multiple-value-bind (exp-form macro-p) (macroexpand form env)
+     (multiple-value-bind (exp-form macro-p) (macroexpand-1 form env)
        (if macro-p
 	   `(synced-form ,exp-form)
 	   `(synced-form-not-macro ,form))))))
@@ -113,6 +120,7 @@
     (if (special-operator-p s)
 	(print s))))
 
+(defvar *proxy* (make-instance 'proxy :evaluator (constantly 42)))
 
 (defclass lazy-list ()
   ((storage :initform nil
