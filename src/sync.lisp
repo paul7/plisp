@@ -55,7 +55,7 @@
 		      (synced-form/stage0 subform env))
 		  (subseq form except)))))
 
-(defmacro synced-form-not-macro (form &environment env)
+(defun synced-form-not-macro (form env)
   (acond
     ((member (car form) *let-like-specials*)
      `(,(car form)
@@ -89,13 +89,13 @@
 	 (make-synced-form (cadr form) 1 env)))
     ((eq (car form) 'function)
      (if (consp (cadr form))
-	 `(synced-form-not-macro ,(cadr form))
+	 (synced-form-not-macro (cadr form) env)
 	 form))
     (t
      (multiple-value-bind (exp-form macro-p) (macroexpand-1 form env)
        (if macro-p
 	   `(synced-form ,exp-form)
-	   `(synced-form-not-macro ,form))))))
+	   (synced-form-not-macro form env))))))
 
 (defmacro synced-form (form &environment env)
   (synced-form/stage0 form env))
