@@ -1,5 +1,7 @@
 (in-package :plisp)
 
+(defparameter *debug* t)
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (set-dispatch-macro-character #\# #\!
     #'(lambda (stream char1 char2)
@@ -19,11 +21,13 @@
 (defgeneric synced-value (object))
 
 (defmethod synced-value ((object t))
-  (format t "syncing ~a~%" object)
+  (if *debug* 
+      (format t "syncing ~a~%" object))
   object)
 
 (defmethod synced-value ((object proxy))
-  (format t "evaluating")
+  (if *debug*
+      (format t "evaluating~%"))
   (funcall (proxy-evaluator object)))
 
 (defmacro synced-values (form) 
