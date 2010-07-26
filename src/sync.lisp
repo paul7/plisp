@@ -18,7 +18,6 @@
 
 (defgeneric synced-value (object))
 
-;; make values-aware
 (defmethod synced-value ((object t))
   (format t "syncing ~a~%" object)
   object)
@@ -34,6 +33,31 @@
 (defmacro unsynced-form (form)
   form)
 
+; THROW                 +
+; PROGV                 -
+; IF                    +
+; UNWIND-PROTECT        +
+; SYMBOL-MACROLET       + 
+; LOAD-TIME-VALUE       -
+; SETQ                  - 
+; LOCALLY               +
+; EVAL-WHEN             +
+; THE                   +
+; MULTIPLE-VALUE-PROG1  +
+; MACROLET              +
+; RETURN-FROM           +
+; LET                   +
+; TAGBODY               -
+; FLET                  +
+; BLOCK                 +
+; MULTIPLE-VALUE-CALL   +
+; GO                    -
+; CATCH                 +
+; FUNCTION              +
+; PROGN                 +
+; QUOTE                 +
+; LET*                  +
+; LABELS                +
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *special-atoms*
     '(nil t))
@@ -47,56 +71,62 @@
       ((block eval-when lambda return-from the) . 2)
       ((#+sbcl sb-int:named-lambda) . 3)))
   (defparameter *let-like-specials*
-    '(let flet labels symbol-macrolet let*))
+    '(let symbol-macrolet let*))
+  (defparameter *flet-like-specials*
+    '(flet labels macrolet))
 
   (defun make-synced-form (form except env) 
     `(,@(subseq form 0 except)
 	,@(mapcar #'(lambda (subform)
 		      (synced-form/stage0 subform env))
-		  (subseq form except)))))
+		  (subseq form except))))
 
-(defun synced-form-not-macro (form env)
-  (acond
-    ((member (car form) *let-like-specials*)
-     `(,(car form)
-	,(mapcar #'(lambda (binding)
-		     `(,(car binding)
-			(synced-form ,(cadr binding))
-			,@(cddr binding)))
-		 (cadr form))
-	,@(make-synced-form (cddr form) 0 env)))
-    ((dolist (spec *quoting-specials*)
-       (if (member (car form) (car spec))
-	   (return (cdr spec))))
-     (make-synced-form form it env))
-    ((not (special-operator-p (car form)))
-     `(synced-values ,(make-synced-form form 1 env)))
-    (t 
-     (warn "unsupported special")
-     form)))
+  (defun synced-form-not-macro (form env)
+    (acond
+      ((member (car form) *let-like-specials*)
+       `(,(car form)
+	  ,(mapcar #'(lambda (binding)
+		       (make-synced-form binding 1 env))
+		   (cadr form))
+	  ,@(make-synced-form (cddr form) 0 env)))
+      ((member (car form) *flet-like-specials*)
+       `(,(car form)
+	  ,(mapcar #'(lambda (binding)
+		       (make-synced-form binding 2 env))
+		   (cadr form))
+	  ,@(make-synced-form (cddr form) 0 env)))
+      ((dolist (spec *quoting-specials*)
+	 (if (member (car form) (car spec))
+	     (return (cdr spec))))
+       (make-synced-form form it env))
+      ((not (special-operator-p (car form)))
+       `(synced-values ,(make-synced-form form 1 env)))
+      (t 
+       (warn "unsupported special")
+       form)))
 
-(defun synced-form/stage0 (form env)
-  (cond
-    ((and (symbolp form)
-	  (not (member form *special-atoms*)))
-     `(synced-value ,form))
-    ((or (atom form)
-	 (member (car form) *quotes*))
-     form)
-    ((eq (car form) 'unsynced-form)
-     (if (atom (cadr form))
-	 (cadr form)
-	 (make-synced-form (cadr form) 1 env)))
-    ((eq (car form) 'function)
-     (if (consp (cadr form))
-	 (synced-form-not-macro (cadr form) env)
-	 form))
-    (t
-     (multiple-value-bind (exp-form macro-p) (macroexpand-1 form env)
-       (if macro-p
-	   `(synced-form ,exp-form)
-	   (synced-form-not-macro form env))))))
-
+  (defun synced-form/stage0 (form env)
+    (cond
+      ((and (symbolp form)
+	    (not (member form *special-atoms*)))
+       `(synced-value ,form))
+      ((or (atom form)
+	   (member (car form) *quotes*))
+       form)
+      ((eq (car form) 'unsynced-form)
+       (if (atom (cadr form))
+	   (cadr form)
+	   (make-synced-form (cadr form) 1 env)))
+      ((eq (car form) 'function)
+       (if (consp (cadr form))
+	   (synced-form-not-macro (cadr form) env)
+	   form))
+      (t
+       (multiple-value-bind (exp-form macro-p) (macroexpand-1 form env)
+	 (if macro-p
+	     `(synced-form ,exp-form)
+	     (synced-form-not-macro form env)))))))
+  
 (defmacro synced-form (form &environment env)
   (synced-form/stage0 form env))
 
