@@ -38,7 +38,7 @@
 ; IF                    +
 ; UNWIND-PROTECT        +
 ; SYMBOL-MACROLET       + 
-; LOAD-TIME-VALUE       -
+; LOAD-TIME-VALUE       +
 ; SETQ                  + 
 ; LOCALLY               +
 ; EVAL-WHEN             +
@@ -47,7 +47,7 @@
 ; MACROLET              +
 ; RETURN-FROM           +
 ; LET                   +
-; TAGBODY               -
+; TAGBODY               +
 ; FLET                  +
 ; BLOCK                 +
 ; MULTIPLE-VALUE-CALL   +
@@ -77,10 +77,10 @@
   (defparameter *setq-like-specials*
     '(setq #+allegro psetq))
 
-  (defun make-synced-form (form except env) 
+  (defun make-synced-form (form except env &key tagbody) 
     `(,@(subseq form 0 except)
 	,@(mapcar #'(lambda (subform)
-		      (synced-form/stage0 subform env))
+		      (synced-form/stage0 subform env :tagbody tagbody))
 		  (subseq form except))))
 
   (defun make-synced-form/setq (form env)
@@ -108,6 +108,10 @@
 	  ,@(make-synced-form (cddr form) 0 env)))
       ((member (car form) *setq-like-specials*)
        (make-synced-form/setq form env))
+      ((eq (car form) 'load-time-value)
+       `(,(car form) ,(synced-form/stage0 (cadr form) env) ,@(cddr form)))
+      ((eq (car form) 'tagbody)
+       (make-synced-form form 1 env :tagbody t))
       ((dolist (spec *quoting-specials*)
 	 (if (member (car form) (car spec))
 	     (return (cdr spec))))
@@ -118,11 +122,13 @@
        (warn "unsupported special")
        form)))
 
-  (defun synced-form/stage0 (form env)
+  (defun synced-form/stage0 (form env &key tagbody)
     (cond
       ((and (symbolp form)
 	    (not (member form *special-atoms*)))
-       `(synced-value ,form))
+       (if tagbody
+	   form
+	   `(synced-value ,form)))
       ((or (atom form)
 	   (member (car form) *quotes*))
        form)
