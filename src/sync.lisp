@@ -34,12 +34,12 @@
   form)
 
 ; THROW                 +
-; PROGV                 -
+; PROGV                 +
 ; IF                    +
 ; UNWIND-PROTECT        +
 ; SYMBOL-MACROLET       + 
 ; LOAD-TIME-VALUE       -
-; SETQ                  - 
+; SETQ                  + 
 ; LOCALLY               +
 ; EVAL-WHEN             +
 ; THE                   +
@@ -51,7 +51,7 @@
 ; FLET                  +
 ; BLOCK                 +
 ; MULTIPLE-VALUE-CALL   +
-; GO                    -
+; GO                    +
 ; CATCH                 +
 ; FUNCTION              +
 ; PROGN                 +
@@ -67,19 +67,30 @@
   (defparameter *quoting-specials*
     '(((if setq tagbody progn throw unwind-protect
 	   locally multiple-value-prog1 multiple-value-call
-	   catch progn) . 1)
-      ((block eval-when lambda return-from the) . 2)
+	   catch progn progv) . 1)
+      ((block eval-when lambda return-from the go) . 2)
       ((#+sbcl sb-int:named-lambda) . 3)))
   (defparameter *let-like-specials*
     '(let symbol-macrolet let*))
   (defparameter *flet-like-specials*
     '(flet labels macrolet))
+  (defparameter *setq-like-specials*
+    '(setq #+allegro psetq))
 
   (defun make-synced-form (form except env) 
     `(,@(subseq form 0 except)
 	,@(mapcar #'(lambda (subform)
 		      (synced-form/stage0 subform env))
 		  (subseq form except))))
+
+  (defun make-synced-form/setq (form env)
+    (labels ((setq-body (form env)
+	       (if form
+		   `(,(car form) ,(synced-form/stage0 (cadr form) env)
+		      ,@(setq-body (cddr form) env)))))
+      (if (oddp (length form))
+	  `(,(car form) ,@(setq-body (cdr form) env))
+	  form))) ; let the compiler complain
 
   (defun synced-form-not-macro (form env)
     (acond
@@ -95,6 +106,8 @@
 		       (make-synced-form binding 2 env))
 		   (cadr form))
 	  ,@(make-synced-form (cddr form) 0 env)))
+      ((member (car form) *setq-like-specials*)
+       (make-synced-form/setq form env))
       ((dolist (spec *quoting-specials*)
 	 (if (member (car form) (car spec))
 	     (return (cdr spec))))
