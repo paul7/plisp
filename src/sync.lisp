@@ -92,7 +92,7 @@
 	  `(,(car form) ,@(setq-body (cdr form) env))
 	  form))) ; let the compiler complain
 
-  (defun synced-form-not-macro (form env)
+  (defun synced-form-not-macro (form env &key tagbody)
     (acond
       ((member (car form) *let-like-specials*)
        `(,(car form)
@@ -117,7 +117,9 @@
 	     (return (cdr spec))))
        (make-synced-form form it env))
       ((not (special-operator-p (car form)))
-       `(synced-values ,(make-synced-form form 1 env)))
+       (if tagbody
+	   (make-synced-form form 1 env)
+	   `(synced-values ,(make-synced-form form 1 env))))
       (t 
        (warn "unsupported special")
        form)))
@@ -144,7 +146,7 @@
        (multiple-value-bind (exp-form macro-p) (macroexpand-1 form env)
 	 (if macro-p
 	     `(synced-form ,exp-form)
-	     (synced-form-not-macro form env)))))))
+	     (synced-form-not-macro form env :tagbody tagbody)))))))
   
 (defmacro synced-form (form &environment env)
   (synced-form/stage0 form env))
