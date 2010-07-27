@@ -62,11 +62,14 @@
 ; QUOTE                 +
 ; LET*                  +
 ; LABELS                +
+
+;; DEFCLASS             +
+;; DEFSTRUCT            -
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *special-atoms*
     '(nil t))
   (defparameter *quotes* 
-    '(defstruct defclass quote defgeneric defmacro
+    '(defstruct quote defgeneric defmacro
       declare declaim proclaim))
   (defparameter *quoting-specials*
     '(((if setq tagbody progn throw unwind-protect
